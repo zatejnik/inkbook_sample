@@ -22,6 +22,13 @@ import androidx.core.content.ContextCompat
 import com.google.android.material.appbar.CollapsingToolbarLayout
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.io.*
+import java.net.URL
+import java.net.URLConnection
+import android.net.NetworkInfo
+
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
 
 
 class ScrollingActivity : AppCompatActivity() {
@@ -39,11 +46,15 @@ class ScrollingActivity : AppCompatActivity() {
 
 //        val list: ListView = findViewById(R.id.list)
         findViewById<FloatingActionButton>(R.id.fab).setOnClickListener { view ->
-            download(
-                this.baseContext,
-                "https://opendata.ecdc.europa.eu/covid19/casedistribution/csv",
-                "Pobieram CSV"
-            )
+            if(isOnline()) {
+                download(
+                    this.baseContext,
+                    "https://opendata.ecdc.europa.eu/covid19/casedistribution/csv",
+                    "Pobieram CSV"
+                )
+            } else {
+                Toast.makeText(applicationContext, resources.getString(R.string.you_offline), Toast.LENGTH_SHORT).show()
+            }
         }
 
     }
@@ -116,7 +127,7 @@ class ScrollingActivity : AppCompatActivity() {
                         val list: ListView = findViewById(R.id.list)
 
                         val customAdapter = CustomAdapter(context, arrayList)
-                        list.setAdapter(customAdapter)
+                        list.adapter = customAdapter
                         print(arrayList)
 
                     } else {
@@ -131,6 +142,12 @@ class ScrollingActivity : AppCompatActivity() {
         registerReceiver(downloadReceiver, filter)
         return downloadReference
 
+    }
+
+    fun isOnline(): Boolean {
+        val connMgr = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val networkInfo: NetworkInfo? = connMgr.activeNetworkInfo
+        return networkInfo?.isConnected == true
     }
 
     fun Read_File(context: Context, filename: String?): String? {
