@@ -32,14 +32,18 @@ class ScrollingActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        check()
+
         setContentView(R.layout.activity_scrolling)
         setSupportActionBar(findViewById(R.id.toolbar))
         findViewById<CollapsingToolbarLayout>(R.id.toolbar_layout).title = title
 
-        val list: ListView = findViewById(R.id.list)
+//        val list: ListView = findViewById(R.id.list)
         findViewById<FloatingActionButton>(R.id.fab).setOnClickListener { view ->
-            download(this.baseContext,"https://opendata.ecdc.europa.eu/covid19/casedistribution/csv", "Pobieram CSV")
+            download(
+                this.baseContext,
+                "https://opendata.ecdc.europa.eu/covid19/casedistribution/csv",
+                "Pobieram CSV"
+            )
         }
 
     }
@@ -60,25 +64,27 @@ class ScrollingActivity : AppCompatActivity() {
             else -> super.onOptionsItemSelected(item)
         }
     }
-    private fun download(baseActivity:Context, url: String?, title: String?): Long {
 
-        val direct = File(Environment.getExternalStorageDirectory().toString() + "/inkbook")
-        Log.e(TAG, "Directory: $direct")
+    private fun download(baseActivity: Context, url: String?, title: String?): Long {
 
-        if (!direct.exists()) {
+        val direct = baseActivity.getExternalFilesDir("inkbook")
+
+        Log.e(TAG, "${baseActivity.getExternalFilesDir("inkbook")}")
+
+        if (!direct!!.exists()) {
             direct.mkdirs()
             Log.e(TAG, "dir not exist, making directory: $direct")
         }
 
         var extension = "csv"
         val downloadReference: Long
-        var  dm: DownloadManager
-        dm= baseActivity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        var dm: DownloadManager
+        dm = baseActivity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val uri = Uri.parse(url)
         val request = DownloadManager.Request(uri)
         request.setDestinationInExternalPublicDir(
-                "/inkbook",
-                "covid" + extension
+            "/inkbook",
+            "covid" + extension
         )
         request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
         request.setTitle(title)
@@ -104,7 +110,7 @@ class ScrollingActivity : AppCompatActivity() {
                         val uri: String =
                             cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI))
                         val file = File(Uri.parse(uri).path)
-                        val importer = ImportCsvHelper();
+                        val importer = ImportCsvHelper()
                         val arrayList = importer.save(file)
 
                         val list: ListView = findViewById(R.id.list)
@@ -126,6 +132,7 @@ class ScrollingActivity : AppCompatActivity() {
         return downloadReference
 
     }
+
     fun Read_File(context: Context, filename: String?): String? {
         return try {
             val fis: FileInputStream = context.openFileInput(filename)
@@ -144,24 +151,5 @@ class ScrollingActivity : AppCompatActivity() {
         } catch (e: IOException) {
             null
         }
-    }
-    private fun check(): Boolean {
-        val permissions = arrayOf(
-                Manifest.permission.INTERNET,
-                Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE)
-        var result: Int
-        val listPermissionsNeeded: MutableList<String> = ArrayList()
-        for (p in permissions) {
-            result = ContextCompat.checkSelfPermission(this, p)
-            if (result != PackageManager.PERMISSION_GRANTED) {
-                listPermissionsNeeded.add(p)
-            }
-        }
-        if (!listPermissionsNeeded.isEmpty()) {
-            ActivityCompat.requestPermissions(this, listPermissionsNeeded.toTypedArray(), 100)
-            return false
-        }
-        return true
     }
 }
