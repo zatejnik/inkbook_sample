@@ -69,22 +69,22 @@ class ScrollingActivity : AppCompatActivity() {
 
         val direct = baseActivity.getExternalFilesDir("inkbook")
 
-        Log.e(TAG, "${baseActivity.getExternalFilesDir("inkbook")}")
+//        Log.e(TAG, "${baseActivity.getExternalFilesDir("inkbook")}")
 
         if (!direct!!.exists()) {
             direct.mkdirs()
             Log.e(TAG, "dir not exist, making directory: $direct")
         }
 
-        var extension = "csv"
+        val extension = "csv"
         val downloadReference: Long
-        var dm: DownloadManager
-        dm = baseActivity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val dm = baseActivity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val uri = Uri.parse(url)
         val request = DownloadManager.Request(uri)
-        request.setDestinationInExternalPublicDir(
-            "/inkbook",
-            "covid" + extension
+        request.setDestinationInExternalFilesDir(
+            baseActivity,
+            direct.absolutePath,
+            "covid.$extension"
         )
         request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
         request.setTitle(title)
