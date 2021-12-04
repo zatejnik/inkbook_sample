@@ -1,13 +1,13 @@
 package eu.inkbook.sample
 
-import android.Manifest
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.database.Cursor
+import android.net.ConnectivityManager
+import android.net.NetworkInfo
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
@@ -17,18 +17,9 @@ import android.view.MenuItem
 import android.widget.ListView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.google.android.material.appbar.CollapsingToolbarLayout
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.io.*
-import java.net.URL
-import java.net.URLConnection
-import android.net.NetworkInfo
-
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.os.Build
 
 
 class ScrollingActivity : AppCompatActivity() {
@@ -47,8 +38,8 @@ class ScrollingActivity : AppCompatActivity() {
 //        val list: ListView = findViewById(R.id.list)
         findViewById<FloatingActionButton>(R.id.fab).setOnClickListener { view ->
             if(isOnline()) {
-                download(
-                    this.baseContext,
+                downloadCsvDataFile(
+                    this@ScrollingActivity,
                     "https://opendata.ecdc.europa.eu/covid19/casedistribution/csv",
                     "Pobieram CSV"
                 )
@@ -76,75 +67,81 @@ class ScrollingActivity : AppCompatActivity() {
         }
     }
 
-    private fun download(baseActivity: Context, url: String?, title: String?): Long {
+    private fun isExternalStorageWritableAndReadable(): Boolean {
+        return Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED
+    }
 
+    private fun downloadCsvDataFile(baseActivity: Context, url: String?, title: String?): Long {
         val direct = baseActivity.getExternalFilesDir("inkbook")
 
-//        Log.e(TAG, "${baseActivity.getExternalFilesDir("inkbook")}")
+        // Check if external storage available and can permit r/w operations
+        if(isExternalStorageWritableAndReadable() && direct != null) {
+            if (!direct.exists()) {
+                val res = direct.mkdirs()
+                Log.e(TAG, "dir not exist, making directory: $res")
+            }
 
-        if (!direct!!.exists()) {
-            direct.mkdirs()
-            Log.e(TAG, "dir not exist, making directory: $direct")
-        }
+            val extension = "csv"
+            val downloadReference: Long
+            val dm = baseActivity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val uri = Uri.parse(url)
+            val request = DownloadManager.Request(uri)
+            request.setDestinationInExternalFilesDir(
+                baseActivity,
+                "inkbook",
+                "covid.$extension"
+            )
+            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            request.setTitle(title)
+            Toast.makeText(baseActivity, "Start downloading..", Toast.LENGTH_SHORT).show()
 
-        val extension = "csv"
-        val downloadReference: Long
-        val dm = baseActivity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        val uri = Uri.parse(url)
-        val request = DownloadManager.Request(uri)
-        request.setDestinationInExternalFilesDir(
-            baseActivity,
-            direct.absolutePath,
-            "covid.$extension"
-        )
-        request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-        request.setTitle(title)
-        Toast.makeText(baseActivity, "start Downloading..", Toast.LENGTH_SHORT).show()
+            downloadReference = dm?.enqueue(request) ?: 0
+            val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+            val downloadReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    val downloadId =
+                        intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+                    if (downloadId == -1L) return
 
-        downloadReference = dm?.enqueue(request) ?: 0
-        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-        val downloadReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                val downloadId =
-                    intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                if (downloadId == -1L) return
+                    // query download status
+                    val cursor: Cursor =
+                        dm.query(DownloadManager.Query().setFilterById(downloadId))
+                    if (cursor.moveToFirst()) {
+                        val status: Int =
+                            cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS))
+                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
 
-                // query download status
-                val cursor: Cursor =
-                    dm.query(DownloadManager.Query().setFilterById(downloadId))
-                if (cursor.moveToFirst()) {
-                    val status: Int =
-                        cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS))
-                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                            // download is successful
+                            val uri: String =
+                                cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI))
+                            val file = File(Uri.parse(uri).path)
+                            val importer = ImportCsvHelper()
+                            val arrayList = importer.save(file)
 
-                        // download is successful
-                        val uri: String =
-                            cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI))
-                        val file = File(Uri.parse(uri).path)
-                        val importer = ImportCsvHelper()
-                        val arrayList = importer.save(file)
+                            val list: ListView = findViewById(R.id.list)
 
-                        val list: ListView = findViewById(R.id.list)
+                            val customAdapter = CustomAdapter(context, arrayList)
+                            list.adapter = customAdapter
+                            print(arrayList)
 
-                        val customAdapter = CustomAdapter(context, arrayList)
-                        list.adapter = customAdapter
-                        print(arrayList)
-
+                        } else {
+                            // download is assumed cancelled
+                        }
                     } else {
                         // download is assumed cancelled
                     }
-                } else {
-                    // download is assumed cancelled
                 }
             }
+
+            registerReceiver(downloadReceiver, filter)
+            return downloadReference
+        } else {
+            Toast.makeText(baseActivity, "External storage is missing", Toast.LENGTH_LONG).show()
+            return -1L
         }
-
-        registerReceiver(downloadReceiver, filter)
-        return downloadReference
-
     }
 
-    fun isOnline(): Boolean {
+    private fun isOnline(): Boolean {
         val connMgr = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val networkInfo: NetworkInfo? = connMgr.activeNetworkInfo
         return networkInfo?.isConnected == true
