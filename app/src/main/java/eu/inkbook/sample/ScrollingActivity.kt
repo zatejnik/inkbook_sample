@@ -72,69 +72,71 @@ class ScrollingActivity : AppCompatActivity() {
     }
 
     private fun downloadCsvDataFile(baseActivity: Context, url: String?, title: String?): Long {
-        val direct = baseActivity.getExternalFilesDir("inkbook")
+        val direct = baseActivity.getExternalFilesDir(null)
 
         // Check if external storage available and can permit r/w operations
         if(isExternalStorageWritableAndReadable() && direct != null) {
-            if (!direct.exists()) {
-                val res = direct.mkdirs()
-                Log.e(TAG, "dir not exist, making directory: $res")
-            }
 
             val extension = "csv"
-            val downloadReference: Long
             val dm = baseActivity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             val uri = Uri.parse(url)
             val request = DownloadManager.Request(uri)
-            request.setDestinationInExternalFilesDir(
-                baseActivity,
-                "inkbook",
-                "covid.$extension"
-            )
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            request.setTitle(title)
-            Toast.makeText(baseActivity, "Start downloading..", Toast.LENGTH_SHORT).show()
 
-            downloadReference = dm?.enqueue(request) ?: 0
-            val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-            val downloadReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-                override fun onReceive(context: Context, intent: Intent) {
-                    val downloadId =
-                        intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                    if (downloadId == -1L) return
+            try {
+                request.setDestinationInExternalFilesDir(
+                    baseActivity,
+                    null,
+                    "covid.$extension"
+                )
+                request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                request.setTitle(title)
 
-                    // query download status
-                    val cursor: Cursor =
-                        dm.query(DownloadManager.Query().setFilterById(downloadId))
-                    if (cursor.moveToFirst()) {
-                        val status: Int =
-                            cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS))
-                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                Toast.makeText(baseActivity, "Start downloading..", Toast.LENGTH_SHORT).show()
 
-                            // download is successful
-                            val uri: String =
-                                cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI))
-                            val file = File(Uri.parse(uri).path)
-                            val importer = ImportCsvHelper()
-                            val arrayList = importer.save(file)
+                val downloadReference = dm.enqueue(request)
+                val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+                val downloadReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+                    override fun onReceive(context: Context, intent: Intent) {
+                        val downloadId =
+                            intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+                        if (downloadId == -1L) return
 
-                            val list: ListView = findViewById(R.id.list)
+                        // query download status
+                        val cursor: Cursor =
+                            dm.query(DownloadManager.Query().setFilterById(downloadId))
+                        if (cursor.moveToFirst()) {
+                            val status: Int =
+                                cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS))
+                            if (status == DownloadManager.STATUS_SUCCESSFUL) {
 
-                            val customAdapter = CustomAdapter(context, arrayList)
-                            list.adapter = customAdapter
-                            print(arrayList)
+                                // download is successful
+                                val uri: String =
+                                    cursor.getString(cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI))
+                                val file = File(Uri.parse(uri).path)
+                                val importer = ImportCsvHelper()
+                                val arrayList = importer.save(file)
 
+                                val list: ListView = findViewById(R.id.list)
+
+                                val customAdapter = CustomAdapter(context, arrayList)
+                                list.adapter = customAdapter
+                                print(arrayList)
+
+                            } else {
+                                // download is assumed cancelled
+                            }
                         } else {
                             // download is assumed cancelled
                         }
-                    } else {
-                        // download is assumed cancelled
                     }
                 }
-            }
 
-            registerReceiver(downloadReceiver, filter)
-            return downloadReference
+                registerReceiver(downloadReceiver, filter)
+                return downloadReference
+            } catch (e: IllegalStateException) {
+                Toast.makeText(baseActivity, "The external storage directory cannot be found or created", Toast.LENGTH_LONG).show()
+                return -1L
+            }
         } else {
             Toast.makeText(baseActivity, "External storage is missing", Toast.LENGTH_LONG).show()
             return -1L
@@ -142,8 +144,8 @@ class ScrollingActivity : AppCompatActivity() {
     }
 
     private fun isOnline(): Boolean {
-        val connMgr = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val networkInfo: NetworkInfo? = connMgr.activeNetworkInfo
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val networkInfo: NetworkInfo? = connectivityManager.activeNetworkInfo
         return networkInfo?.isConnected == true
     }
 
