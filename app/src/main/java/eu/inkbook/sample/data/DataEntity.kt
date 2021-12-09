@@ -1,6 +1,6 @@
-package eu.inkbook.sample
+package eu.inkbook.sample.data
 
-class DataEntity(
+data class DataEntity(
     val dateRep: String,
     val day: Int,
     val month: Int,
@@ -13,6 +13,4 @@ class DataEntity(
     val popData2019: Long,
     val continentExp: String,
     val Cumulative_number: Double
-) {
-
-}
+)
